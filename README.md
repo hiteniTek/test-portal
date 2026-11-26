@@ -1,47 +1,30 @@
-# i-TEK PM Portal V7 — Hardened source candidate
+# i-TEK PM Portal V8 — durable dual-store synchronization candidate
 
-This version builds on V6 and adds targeted Sheets lookups, a Neon sync outbox and cron endpoint, frontend/API error IDs, drag-reorder dashboard tiles, resumable visit-grouped history imports, and server-generated PDF downloads.
+V8 builds on the current portal without replacing the four-zone role model or employee password login.
 
-**Not production certified.** Two-database writes cannot be atomic. Approval reconciliation is not fully automated; Apps Script bootstrap still scans some full sheets. Cron on Vercel Free is scheduled daily and session tokens can expire before retries. For guaranteed recovery, implement a service-identity Sheets integration or persistent service credentials with scoped access, and independently monitor the queue.
+## Main changes
+- Neon dashboard projection writes are set-oriented and run in one Neon transaction, instead of one insert round trip per device and spare.
+- Apps Script user/session/visit/device/spare lookups use targeted search where an exact key is available.
+- New outbox jobs do not depend on an expiring employee session. They use an Apps Script service identity and a server-only shared secret.
+- Customer approval decisions enter the same durable outbox, are processed idempotently and update Sheets plus Neon through the same worker.
+- Outbox jobs use short processing leases so concurrent workers do not intentionally claim the same active job.
+- GitHub Actions reconciliation is configured every five minutes, alongside the Vercel scheduled fallback.
+- Existing V7 outbox rows are still attempted using their encrypted session tokens; those legacy jobs may fail if the old session expired.
 
-Read `V7-DEPLOY.md` for configuration and acceptance tests.
+## Data boundaries
+Google Sheets remains authoritative for full visit, device, spare, feedback and operational details. Neon holds dashboard projections and sync metadata. While a job is pending, its detailed payload is held as authenticated ciphertext in the Neon outbox; after both stores are confirmed, that ciphertext is cleared. Photos remain in Drive.
 
-# i-TEK PM Portal V5 — Neon dashboard + Google Sheets detailed records
+## Deploy safely
+Read V8-DEPLOY.md. All development work is isolated on branch v8-development. Validate in staging before merging.
 
-## Deployment (new staging deployment first)
+## Checks
+Run npm install followed by npm test. These are syntax checks only; they do not prove live integrations or production readiness.
 
-1. Back up the existing Apps Script project, Google Spreadsheet and V4 ZIP. **Do not delete existing data.**
-2. Create a Neon PostgreSQL Free project. In Neon SQL Editor execute `db/schema.sql`. Keep the connection string private.
-3. Create a Vercel project from this folder (via GitHub). Framework preset **Other**, root at project root; output directory `public`.
-4. In Vercel Project Settings > Environment Variables set `DATABASE_URL` to the Neon connection string and `APPS_SCRIPT_URL` to your deployed Google Apps Script `/exec` URL. Both are **server-only** variables; never prefix with `VITE_` or `NEXT_PUBLIC_`.
-5. In your **existing** Apps Script project, update `Code.gs` from `apps-script/Code.gs`, keeping the current Script Properties (`SPREADSHEET_ID`, `DRIVE_FOLDER_ID`, HOD configuration). Deploy **new version**. Do not rerun `provisionInitialHod` or import seeds into live sheets.
-6. Deploy Vercel. In Apps Script Script Properties set `PUBLIC_PORTAL_URL` to the deployed Vercel URL (without slash).
-7. Log in as an existing engineer and create a **new test visit**. Confirm: IndexedDB local save, Google Sheets Visits/Devices/Spares, Neon dashboard_visits/dashboard_devices/dashboard_spares, and spare-level dashboard.
-8. Generate customer QR and scan with a separate phone (private window). The `/approve/TOKEN` route must display the customer report without employee login. Approve; confirm Sheets status and Neon dashboard status. Test rejection separately.
-9. Test offline drafts, repeated sync, duplicate submissions, manager zone restrictions, at least 300 visits with representative photos, concurrency, PDF print and failure recovery before production rollout.
+## Operational constraints
+Neon and Google Sheets do not share an atomic transaction. V8 implements durable eventual consistency with outbox retries, idempotent projections and customer-decision recovery. Provider outages, quotas, credential misconfiguration and scheduled-worker delays can still delay synchronization. Monitor sync_outbox and reconcile data counts before company-wide rollout.
 
-## Synchronization model and limitations
-
-- Google Sheets is authoritative for **full operational detail**. Neon stores **only dashboard projections**, plus no passwords or customer text feedback.
-- On visit submission, `/api/bridge` writes Google Sheets, reads back the visit details, then upserts the Neon projection. The browser retains its IndexedDB pending item if either operation fails, and retries. **These writes are sequential, not atomic or simultaneous.**
-- On client approval, Sheets updates first, then Neon status updates. If Neon is down after Sheets accepts approval, the customer sees a temporary error although Sheets has recorded the decision. A reconciliation job is needed before calling this production-grade.
-- The dashboard loads spare-level data from Neon with server-side role checks through Apps Script. The original Google Sheets dashboard remains as fallback. Existing visits **are not automatically backfilled** into Neon; use a controlled migration/backfill before rollout.
-- Neon Free and Google Sheets API quotas, cold starts, and Vercel execution time limits apply. There is no unconditional zero-failure guarantee.
-- Vtiger requires real integration credentials; automatic Outlook sending requires an approved Microsoft 365 integration. The existing PDF is browser Print / Save as PDF, not a signed immutable PDF.
-- User passwords and permissions remain managed by Apps Script. For company-wide deployment, review authentication security, rate limiting, backup/restore, and logging.
-
-## Source layout
-
-- `public/`: frontend, IndexedDB, customer QR and report view
-- `api/bridge.js`: Google Sheets writes followed by Neon projection
-- `api/dashboard.js`: authorized Neon dashboard/spare drilldowns
-- `api/_lib.js`: server-only Google Sheets bridge and Neon helpers
-- `db/schema.sql`: Neon schema
-- `apps-script/Code.gs`: existing Apps Script with a minimal `dashboardScope` API
-- `apps-script/*.csv`: original seed files, **not for re-import into populated production**
-
-## Quick local check
-
-`npm install && npm test`
-
-To run Vercel functions locally, install Vercel CLI and use `vercel dev` with environment variables configured. Do not commit `.env.local`.
+## Error reporting
+- Each client-side error is assigned a unique ITEK-FRONTEND ID when one is not supplied by the API.
+- API errors use a unique ID with a category and standard remark.
+- Each failed outbox attempt receives a new ITEK error ID stored with its category, code, remark and reason in sync_outbox.last_error.
+- Queue acknowledgements distinguish synced and pending states; do not mark an item Fully Synced until the outbox job reaches done.
