@@ -1,0 +1,19 @@
+{
+  "version": 2,
+  "rewrites": [
+    {
+      "source": "/approve/:token",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/",
+      "destination": "/index.html"
+    }
+  ],
+  "crons": [
+    {
+      "path": "/api/reconcile",
+      "schedule": "0 2 * * *"
+    }
+  ]
+}
