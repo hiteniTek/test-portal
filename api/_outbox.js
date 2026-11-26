@@ -51,6 +51,16 @@ export async function queueClientDecision(sql, payload) {
   return eventId;
 }
 
+export async function queueProjectionRefresh(sql, visitId, updatedAt) {
+  const id = String(visitId || '');
+  if (!id) throw new Error('Visit ID required for dashboard reconciliation');
+  const version = createHash('sha256').update(String(updatedAt || '')).digest('hex').slice(0, 16);
+  const eventId = 'projection:' + id + ':' + version;
+  await sql`INSERT INTO sync_outbox (event_id,visit_id,action,payload,state,next_attempt_at)
+    VALUES (${eventId},${id},'refreshProjection','{}'::jsonb,'pending',now())
+    ON CONFLICT (event_id) DO NOTHING`;
+  return eventId;
+}
 export async function processEvent(sql, eventId) {
   const claimed = await sql`UPDATE sync_outbox
     SET state='processing', lease_until=now()+interval '90 seconds',
@@ -66,7 +76,10 @@ export async function processEvent(sql, eventId) {
   const job = claimed[0];
   try {
     let result, detail;
-    if (job.action === 'clientDecision') {
+    if (job.action === 'refreshProjection') {
+      detail = await sheetsService('getVisitInternal', {id: job.visit_id});
+      result = {id: job.visit_id, status: detail.status, projectionRefresh: true};
+    } else if (job.action === 'clientDecision') {
       const approval = decryptJson(job.actor_token);
       result = await sheetsService('clientDecision', approval);
       detail = await sheetsService('getVisitInternal', {id: result.id});

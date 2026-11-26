@@ -1,5 +1,5 @@
 import { sqlClient, sheets, scope } from './_lib.js';
-import { queueVisit, queueClientDecision, processEvent } from './_outbox.js';
+import { queueVisit, queueClientDecision, queueProjectionRefresh, processEvent } from './_outbox.js';
 import { fail } from './errors.js';
 
 export default async function handler(req, res) {
@@ -30,7 +30,16 @@ export default async function handler(req, res) {
           && String(existing.clientName || '') === String(payload.name || '').trim()
           && String(existing.clientStars || '') === String(Math.max(1, Math.min(5, Number(payload.stars) || 1)))
           && String(existing.clientFeedback || '') === String(payload.feedback || '').trim();
-        if (sameDecision) return res.status(200).json({ ok: true, data: { id: existing.id, status: existing.status, idempotent: true, neonSynced: true } });
+        if (sameDecision) {
+          const refreshId = await queueProjectionRefresh(sql, existing.id, existing.updatedAt);
+          try {
+            const refreshed = await processEvent(sql, refreshId);
+            if (refreshed.state === 'done') return res.status(200).json({ ok: true, data: { id: existing.id, status: existing.status, idempotent: true, neonSynced: true } });
+          } catch (error) {
+            // The queued projection refresh is retained for the reconciliation worker.
+          }
+          return res.status(202).json({ ok: true, data: { id: existing.id, status: existing.status, idempotent: true, syncState: 'queued', neonSynced: false } });
+        }
         throw new Error('Decision already recorded for this approval link');
       }
       const acceptedPayload = { ...payload, validatedAt };
