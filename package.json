@@ -1,6 +1,6 @@
 {
-  "name": "itek-pm-neon-sheets-v5",
-  "version": "7.0.0",
+  "name": "itek-pm-portal-neon-sheets-v8",
+  "version": "8.0.0",
   "private": true,
   "type": "module",
   "dependencies": {
@@ -8,6 +8,6 @@
     "pdf-lib": "^1.17.1"
   },
   "scripts": {
-    "test": "node --check api/bridge.js && node --check api/dashboard.js && node --check api/_lib.js && node --check api/_outbox.js && node --check api/reconcile.js && node --check api/report.js && node --check api/errors.js && node --check public/client.js"
+    "test": "node --check api/bridge.js && node --check api/dashboard.js && node --check api/_lib.js && node --check api/_outbox.js && node --check api/reconcile.js && node --check api/report.js && node --check api/errors.js && node --check public/client.js && node --check < apps-script/Code.gs"
   }
 }

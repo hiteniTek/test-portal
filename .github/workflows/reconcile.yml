@@ -1,0 +1,22 @@
+name: i-TEK sync reconciliation
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+concurrency:
+  group: itek-reconcile
+  cancel-in-progress: false
+jobs:
+  reconcile:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Process pending Neon outbox jobs
+        env:
+          PORTAL_URL: ${{ vars.VERCEL_PRODUCTION_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          test -n "$PORTAL_URL"
+          test -n "$CRON_SECRET"
+          curl --fail-with-body --silent --show-error --max-time 50 \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            "$PORTAL_URL/api/reconcile"

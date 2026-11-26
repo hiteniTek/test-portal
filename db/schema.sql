@@ -1,4 +1,4 @@
--- Run once in Neon SQL Editor. Dashboard-only projection, no sensitive device IPs or photos.
+-- Neon dashboard projection + durable reconciliation outbox.
 CREATE TABLE IF NOT EXISTS dashboard_visits (
  visit_id text PRIMARY KEY, store_code text NOT NULL, zone text NOT NULL,
  engineer_email text NOT NULL, engineer_name text NOT NULL DEFAULT '',
@@ -20,16 +20,14 @@ CREATE TABLE IF NOT EXISTS dashboard_spares (
  PRIMARY KEY(visit_id,device_index,spare_name)
 );
 CREATE INDEX IF NOT EXISTS idx_spare_name ON dashboard_spares(spare_name);
-CREATE TABLE IF NOT EXISTS dashboard_sync_events (
- event_id text PRIMARY KEY, visit_id text NOT NULL, event_type text NOT NULL,
- created_at timestamptz NOT NULL DEFAULT now()
-);
-
--- V7 durable reconciliation queue. Payload is temporary until Google Sheets confirms receipt.
+CREATE TABLE IF NOT EXISTS dashboard_sync_events (event_id text PRIMARY KEY, visit_id text NOT NULL, event_type text NOT NULL, created_at timestamptz NOT NULL DEFAULT now());
 CREATE TABLE IF NOT EXISTS sync_outbox (
- event_id text PRIMARY KEY, visit_id text NOT NULL, action text NOT NULL,
- payload jsonb NOT NULL, actor_token text, state text NOT NULL DEFAULT 'pending',
- attempts integer NOT NULL DEFAULT 0, next_attempt_at timestamptz NOT NULL DEFAULT now(),
- last_error text, created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now()
+ event_id text PRIMARY KEY, visit_id text NOT NULL, action text NOT NULL, payload jsonb NOT NULL DEFAULT '{}'::jsonb,
+ actor_token text, actor_email text, state text NOT NULL DEFAULT 'pending', attempts integer NOT NULL DEFAULT 0,
+ next_attempt_at timestamptz NOT NULL DEFAULT now(), lease_until timestamptz, last_error text,
+ created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now()
 );
+ALTER TABLE sync_outbox ADD COLUMN IF NOT EXISTS actor_email text;
+ALTER TABLE sync_outbox ADD COLUMN IF NOT EXISTS lease_until timestamptz;
 CREATE INDEX IF NOT EXISTS sync_outbox_due ON sync_outbox(next_attempt_at) WHERE state IN ('pending','retry');
+CREATE INDEX IF NOT EXISTS sync_outbox_lease ON sync_outbox(lease_until) WHERE state='processing';
