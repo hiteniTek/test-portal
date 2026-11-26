@@ -1,4 +1,5 @@
-import {sqlClient,scope} from './_lib.js';\nimport {fail} from './errors.js';
+import {sqlClient,scope} from './_lib.js';
+import {fail} from './errors.js';
 export default async function handler(req,res){
  res.setHeader('Cache-Control','no-store');if(req.method!=='POST')return res.status(405).json({ok:false,error:'Method not allowed'});
  try{
