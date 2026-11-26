@@ -2,9 +2,10 @@ import {neon} from '@neondatabase/serverless';
 export function sqlClient(){if(!process.env.DATABASE_URL)throw Error('DATABASE_URL not configured');return neon(process.env.DATABASE_URL);}
 export async function sheets(action,payload={},token=''){
  const url=process.env.APPS_SCRIPT_URL;if(!url)throw Error('APPS_SCRIPT_URL not configured');
- const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),24000);
- try {const response=await fetch(url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action,payload,token}),redirect:'follow',signal:controller.signal});
- const raw=await response.text();let result;try{result=JSON.parse(raw)}catch{throw Error('Apps Script returned non-JSON; check web app deployment')}if(!result.ok)throw Error(result.error||'Google Sheets request failed');return result.data;
+ const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),20000);
+ try{const response=await fetch(url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action,payload,token}),redirect:'follow',signal:controller.signal,cache:'no-store'});
+ const raw=await response.text();let result;try{result=JSON.parse(raw)}catch{console.error('Upstream response metadata',{action,status:response.status,contentType:response.headers.get('content-type'),host:new URL(response.url).hostname});throw Error('Apps Script returned non-JSON HTML or unexpected content')}
+ if(!response.ok)throw Error('Apps Script HTTP '+response.status);if(!result.ok)throw Error(result.error||'Google Sheets operation failed');return result.data;
  }finally{clearTimeout(timer)}
 }
 export async function scope(token){if(!token)throw Error('Sign in required');return sheets('dashboardScope',{},token)}

@@ -24,3 +24,12 @@ CREATE TABLE IF NOT EXISTS dashboard_sync_events (
  event_id text PRIMARY KEY, visit_id text NOT NULL, event_type text NOT NULL,
  created_at timestamptz NOT NULL DEFAULT now()
 );
+
+-- V7 durable reconciliation queue. Payload is temporary until Google Sheets confirms receipt.
+CREATE TABLE IF NOT EXISTS sync_outbox (
+ event_id text PRIMARY KEY, visit_id text NOT NULL, action text NOT NULL,
+ payload jsonb NOT NULL, actor_token text, state text NOT NULL DEFAULT 'pending',
+ attempts integer NOT NULL DEFAULT 0, next_attempt_at timestamptz NOT NULL DEFAULT now(),
+ last_error text, created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS sync_outbox_due ON sync_outbox(next_attempt_at) WHERE state IN ('pending','retry');

@@ -1,3 +1,11 @@
+# i-TEK PM Portal V7 — Hardened source candidate
+
+This version builds on V6 and adds targeted Sheets lookups, a Neon sync outbox and cron endpoint, frontend/API error IDs, drag-reorder dashboard tiles, resumable visit-grouped history imports, and server-generated PDF downloads.
+
+**Not production certified.** Two-database writes cannot be atomic. Approval reconciliation is not fully automated; Apps Script bootstrap still scans some full sheets. Cron on Vercel Free is scheduled daily and session tokens can expire before retries. For guaranteed recovery, implement a service-identity Sheets integration or persistent service credentials with scoped access, and independently monitor the queue.
+
+Read `V7-DEPLOY.md` for configuration and acceptance tests.
+
 # i-TEK PM Portal V5 — Neon dashboard + Google Sheets detailed records
 
 ## Deployment (new staging deployment first)
