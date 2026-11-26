@@ -22,3 +22,9 @@ Run npm install followed by npm test. These are syntax checks only; they do not 
 
 ## Operational constraints
 Neon and Google Sheets do not share an atomic transaction. V8 implements durable eventual consistency with outbox retries, idempotent projections and customer-decision recovery. Provider outages, quotas, credential misconfiguration and scheduled-worker delays can still delay synchronization. Monitor sync_outbox and reconcile data counts before company-wide rollout.
+
+## Error reporting
+- Each client-side error is assigned a unique ITEK-FRONTEND ID when one is not supplied by the API.
+- API errors use a unique ID with a category and standard remark.
+- Each failed outbox attempt receives a new ITEK error ID stored with its category, code, remark and reason in sync_outbox.last_error.
+- Queue acknowledgements distinguish synced and pending states; do not mark an item Fully Synced until the outbox job reaches done.

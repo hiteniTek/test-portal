@@ -1,6 +1,6 @@
 import { sqlClient, sheets, scope } from './_lib.js';
 import { queueVisit, queueClientDecision, queueProjectionRefresh, processEvent } from './_outbox.js';
-import { fail } from './errors.js';
+import { fail, describeError } from './errors.js';
 
 export default async function handler(req, res) {
   res.setHeader('Cache-Control', 'no-store');
@@ -17,7 +17,8 @@ export default async function handler(req, res) {
         if (processed.state === 'done') return res.status(200).json({ ok: true, data: { ...(processed.result || {}), cloudSynced: true, neonSynced: true, syncState: 'synced' } });
         return res.status(202).json({ ok: true, data: { id: payload.id, syncState: 'queued', cloudSynced: false, neonSynced: false, message: 'Visit accepted; cloud synchronization is pending.' } });
       } catch (error) {
-        return res.status(202).json({ ok: true, data: { id: payload.id, syncState: 'queued', cloudSynced: false, neonSynced: false, message: 'Visit accepted locally and queued for cloud synchronization.' } });
+        const info = error.errorInfo || describeError(error, 'SYNC');
+        return res.status(202).json({ ok: true, data: { id: payload.id, syncState: 'queued', cloudSynced: false, neonSynced: false, errorId: info.errorId, category: info.category, remark: 'Visit accepted; cloud synchronization will retry automatically.' } });
       }
     }
     if (action === 'clientDecision') {
@@ -49,7 +50,8 @@ export default async function handler(req, res) {
         if (processed.state === 'done') return res.status(200).json({ ok: true, data: processed.result || { status: payload.decision === 'approve' ? 'Completed' : 'Rejected', neonSynced: true } });
         return res.status(202).json({ ok: true, data: { status: payload.decision === 'approve' ? 'Completed' : 'Rejected', syncState: 'queued', neonSynced: false, message: 'Customer decision accepted; dashboard synchronization is pending.' } });
       } catch (error) {
-        return res.status(202).json({ ok: true, data: { status: payload.decision === 'approve' ? 'Completed' : 'Rejected', syncState: 'queued', neonSynced: false, message: 'Customer decision accepted and queued for dashboard synchronization.' } });
+        const info = error.errorInfo || describeError(error, 'SYNC');
+        return res.status(202).json({ ok: true, data: { status: payload.decision === 'approve' ? 'Completed' : 'Rejected', syncState: 'queued', neonSynced: false, errorId: info.errorId, category: info.category, remark: 'Customer decision accepted; dashboard synchronization will retry automatically.' } });
       }
     }
     const data = await sheets(action, payload, token);

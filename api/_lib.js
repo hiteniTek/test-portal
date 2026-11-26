@@ -52,7 +52,7 @@ export async function projectVisit(sql, detail) {
   const visitId = String(v.id || '');
   if (!visitId) throw new Error('Missing visit ID for Neon projection');
   const deviceRows = devices.map((d, i) => ({ visit_id: visitId, device_index: i, device_type: String(d.type || '').slice(0, 100), subtype: String(d.subtype || '').slice(0, 100), amc_status: String(d.amc || 'Unknown').slice(0, 40) }));
-  const spareRows = devices.flatMap((d, i) => (Array.isArray(d.spares) ? d.spares : []).map(s => ({ visit_id: visitId, device_index: i, spare_name: String(s.name || '').slice(0, 120) })).filter(s => s.spare_name));
+  const spareRows = devices.flatMap((d, i) => (Array.isArray(d.spares) ? d.spares : []).map(s => ({ visit_id: visitId, device_index: i, spare_name: String((String(s.name || '').toLowerCase() === 'others' && s.otherText) ? 'Others: ' + s.otherText : (s.name || '')).slice(0, 120) })).filter(s => s.spare_name));
   const rating = v.clientStars ? Number(v.clientStars) : null;
   const queries = [
     sql`INSERT INTO dashboard_visits (visit_id,store_code,zone,engineer_email,engineer_name,visit_type,status,created_at,updated_at,rating,damaged,device_count,spare_count,sheets_synced_at)

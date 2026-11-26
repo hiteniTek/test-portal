@@ -101,7 +101,9 @@ export async function processEvent(sql, eventId) {
       WHERE event_id=${eventId}`;
     return {state:'done', result};
   } catch (error) {
-    const message = String(error?.message || error).slice(0, 350);
+    const info = describeError(error, 'SYNC');
+    const message = [info.errorId, info.category, info.code, info.remark, info.reason].join(' | ').slice(0, 500);
+    if (error && typeof error === 'object') error.errorInfo = info;
     await sql`UPDATE sync_outbox
       SET state='retry', last_error=${message}, lease_until=NULL,
           next_attempt_at=now()+LEAST(3600,15*POWER(2,LEAST(attempts,8)))*interval '1 second',

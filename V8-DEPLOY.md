@@ -103,3 +103,6 @@ Only after staging tests pass:
 - Apps Script targeted lookups reduce some full-sheet reads, but HOD-wide, historical import and some administrative paths still need broader data reads.
 - Vercel Free cron is daily. GitHub Actions runs every five minutes but can be delayed. Monitor the outbox.
 - Validate data counts, concurrency, image uploads, QR approval, user scope, PDF generation and backup restoration before rollout.
+
+## Error IDs and support diagnostics
+Every API failure should return an errorId, category, remark and reason. Each outbox retry stores a fresh unique error ID in sync_outbox.last_error. The portal's frontend error handler displays the identifier; support should correlate it with Vercel function logs, Apps Script Executions and the matching outbox event. Do not put passwords, tokens, service secrets or raw customer data into logs.
